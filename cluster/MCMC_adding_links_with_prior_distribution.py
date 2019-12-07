@@ -335,8 +335,6 @@ prior_prob = prior_prob / np.sum(prior_prob)
 #print('The original error is', error_before)
 error_list.append(error_before)
 for i in range(10000):
-    if i%50==0:
-        #print(i)
     #i_x = random.randint(0,max_links*2-1)
     #p = np.ones([m2b.shape[0],  m2b.shape[1]])
     #i_x = random.choice(np.where(x==0)[0], prior_prob[x==0])
