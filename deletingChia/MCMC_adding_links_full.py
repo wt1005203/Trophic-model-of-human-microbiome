@@ -16,16 +16,15 @@ import sys
 ########### import the pickled file containing all processed data which are useful for simulations (the processing is
 ########### done in "Trophic_model_for_gut_data_processing.ipynb")
 import pickle
-pickle_in = open("Chia_network.pickle","rb")
+pickle_in = open("Chia_network"+sys.argv[1]+".pickle","rb")
 net, i_selfish, i_intake, names = pickle.load(pickle_in)
 
-pickle_in = open("Thai_data.pickle","rb")
-thai_metagenome_ID, thai_metagenome, thai_metabolome_ID, thai_metabolome = pickle.load(pickle_in)
+pickle_in = open("Thai_data"+sys.argv[1]+".pickle","rb")
+thai_metagenome_ID, thai_metagenome, thai_metabolome_ID, thai_metabolome, i_nonzero_metabolites = pickle.load(pickle_in)
 
 i_nonzero_microbes = thai_metagenome_ID.values.copy()
-i_nonzero_metabolites = net['metabolites_ID'].unique()
-i_nonzero_metabolites = np.sort(i_nonzero_metabolites)
-
+#i_nonzero_metabolites = net['metabolites_ID'].unique()
+#i_nonzero_metabolites = np.sort(i_nonzero_metabolites)
 
 df_metabolites = pd.DataFrame.from_dict({'oldID': i_nonzero_metabolites, 'newID':list(range(len(i_nonzero_metabolites)))})
 df_metabolites.set_index('oldID', inplace=True)
@@ -176,7 +175,7 @@ def calc_metabolome(x, m2m_layer, numLevels_max, i_intake):
             
     return [met_levels, met_leftover_levels]
 
-net_ori = net.copy()
+
 import random
 ######## Select all microbes in the Thai data:
 b_real = np.zeros((MAX_ID_microbes,))
@@ -234,7 +233,6 @@ def pred_error_addingLinks(x, m2b_ori, b2m_ori, x_ori):
 
     corr_list_aveDiet = np.zeros((41,2))
     log_list_aveDiet = np.zeros((41,2))
-    order_dev_list = np.zeros((41, MAX_ID_metabolites))
     for pa in range(41):
         #print(pa)
         ######## Select an ID of a individual and pull out its experimentally measured metagenome:
@@ -281,8 +279,6 @@ def pred_error_addingLinks(x, m2b_ori, b2m_ori, x_ori):
         i_common = np.where(metabolome_measured * metabolome_pred > 1e-5)[0]
         metabolome_pred_common = metabolome_pred[i_common] / np.sum(metabolome_pred[i_common])
         metabolome_measured_common = metabolome_measured[i_common] / np.sum(metabolome_measured[i_common])
-        ######## compute the bias of the order of magnitude
-        order_dev_list[pa, i_common] = np.log10(metabolome_measured_common + 1e-5) - np.log10(metabolome_pred_common + 1e-5)
 
         corr_list_aveDiet[pa, 0] = pearsonr(ba_pred[b_real>0], b_real[b_real>0])[0]
         corr_list_aveDiet[pa, 1] = pearsonr(metabolome_pred_common, metabolome_measured_common)[0]
@@ -311,55 +307,45 @@ def pred_error_addingLinks(x, m2b_ori, b2m_ori, x_ori):
     pred_error1 = np.mean(log_list_aveDiet[:,0])
     pred_error2 = np.mean(log_list_aveDiet[:,1])
     pred_error3 = np.sum(np.abs(x))
-    hyper_reg = 0.001
+    hyper_reg = 0.0025
     #pred_errorTotal = pred_error1 + pred_error2 + hyper_reg * pred_error3
     pred_errorTotal = pred_error2 + hyper_reg * pred_error3
     #print(pred_error, pred_error3)
     
-    return [pred_errorTotal, np.abs(np.sum(order_dev_list, 0))]
+    return pred_errorTotal
 
 error_list = []
 current_step_list = []
 pos_x_list = []
 metID_list = []
 microbeID_list = []
-prior_list = []
 fun = lambda x: pred_error_addingLinks(x, m2b_ori, b2m_ori, x_ori)
 max_links = m2b.shape[0]*m2b.shape[1]
 x = x_ori.copy()
 #nonChia = np.where(x_ori==0)[0]
-error_before, bias = fun(x)
-bias_ori = bias.copy()
-#prior_prob = 10**np.matlib.repmat(bias[:, np.newaxis], 1, m2b.shape[1]) 
-#prior_prob = np.concatenate([prior_prob.flatten(), prior_prob.flatten()])
-prior_prob = np.matlib.repmat(bias_ori[:, np.newaxis], 1, m2b.shape[1])
-prior_prob = np.concatenate([prior_prob.flatten(), prior_prob.flatten()]) + 0.1
-prior_prob = prior_prob / np.sum(prior_prob)
+error_before = fun(x)
 print('The original error is', error_before)
 error_list.append(error_before)
 
 inverseKT = 5000
 Twindow = 500
-numStepsNotAdded = 0
 error_window = []
 for i in range(10000):
     if i%50==0:
         print(i)
     #i_x = random.randint(0,max_links*2-1)
-    i_x = np.random.choice(np.where(x==0)[0], 1, p=prior_prob[x==0]/np.sum(prior_prob[x==0]))[0]
+    i_x = random.choice(np.where(x==0)[0])
     x[i_x] = 1
     #x[i_x] = 1 - x[i_x]
-    error_after, bias = fun(x)
-    prior_prob = np.matlib.repmat(bias_ori[:, np.newaxis], 1, m2b.shape[1])
-    prior_prob = np.concatenate([prior_prob.flatten(), prior_prob.flatten()]) + 0.1
-    prior_prob = prior_prob / np.sum(prior_prob)
-    if np.random.uniform(0,1,1)[0] <= np.min([1, np.exp((inverseKT)*(error_before - error_after))]): 
+    error_after = fun(x)
+    if np.random.uniform(0,1,1)[0] <= np.min([1, np.exp(inverseKT*(error_before - error_after))]):
+    #if (error_before > error_after):# (np.random.uniform(0,1,1)[0] >= np.exp(1000*(error_before - error_after))):  ## not accepted
+        ## accepted   
         error_before = error_after
         print('accepted, error is', error_before)
         error_list.append(error_before)
         current_step_list.append(i)
         pos_x_list.append(i_x)
-        prior_list.append(prior_prob[i_x])
         if i_x < max_links:
             row_num = i_x // m2b_ori.shape[1]
             col_num = i_x - row_num * m2b_ori.shape[1]
@@ -369,10 +355,9 @@ for i in range(10000):
             col_num = i_x - row_num * b2m_ori.shape[1]
         metID_list.append(row_num)
         microbeID_list.append(col_num)
-        numStepsNotAdded = 0
+        #print('not accepted, error is', error_before)
     else:  ## not accepted   
         x[i_x] = 0
-        numStepsNotAdded += 1
         #x[i_x] = 1 - x[i_x]
     error_window.append(error_before)
     if (i > Twindow) and ((error_window[-1] - error_window[-Twindow]) > -(np.sqrt(Twindow) / inverseKT)):
@@ -388,7 +373,6 @@ net_new = pd.concat([net_ori, net_added])
 
 
 NUMADDED = len(net_new) - len(net_ori)
-
 df_added_metabolites = names.loc[df_metabolites.reset_index().set_index('newID').loc[net_new.iloc[-NUMADDED:,0]].values.flatten()]
 df_added_metabolites.reset_index(inplace=True)
 df_added_metabolites.columns = ['metabolite ID', 'metabolite names'] 
@@ -418,4 +402,4 @@ df_added_pos.columns = ['position in x']
 
 df_added_tables = pd.concat([df_added_metabolites, df_added_microbes, df_added_edgeTypes,  df_added_errorReduced, df_added_step, df_added_pos], axis=1, sort=False)
 df_added_tables.sort_values(by = 'error reduced', ascending=False)
-df_added_tables.to_csv('added_links_prior_distribution_run' + sys.argv[1]+'.csv')
+df_added_tables.to_csv('added_links_full_deleteNum'+sys.argv[1]+'_run' + sys.argv[2]+'.csv')

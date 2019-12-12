@@ -336,6 +336,19 @@ for i in range(5000):
         error_list.append(error_before)
         current_step_list.append(i)
         pos_x_list.append(i_x)
+        # if link in m2b, i.e., consumption link
+        if i_x < max_links:
+                row_num = i_x // m2b_ori.shape[1]
+                col_num = i_x - row_num * m2b_ori.shape[1]
+        elif i_x >= max_links:
+                i_x = i_x - m2b_ori.shape[0] * m2b_ori.shape[1]
+                row_num = i_x // b2m_ori.shape[1]
+                col_num = i_x - row_num * b2m_ori.shape[1]
+        metID_list.append(row_num)
+        microbeID_list.append(col_num)
+                
+                
+            
 
 ######## Convert x to net structure:
 thres = 0.1

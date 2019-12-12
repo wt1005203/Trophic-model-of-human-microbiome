@@ -16,16 +16,15 @@ import sys
 ########### import the pickled file containing all processed data which are useful for simulations (the processing is
 ########### done in "Trophic_model_for_gut_data_processing.ipynb")
 import pickle
-pickle_in = open("Chia_network.pickle","rb")
+pickle_in = open("Chia_network"+sys.argv[1]+".pickle","rb")
 net, i_selfish, i_intake, names = pickle.load(pickle_in)
 
-pickle_in = open("Thai_data.pickle","rb")
-thai_metagenome_ID, thai_metagenome, thai_metabolome_ID, thai_metabolome = pickle.load(pickle_in)
+pickle_in = open("Thai_data"+sys.argv[1]+".pickle","rb")
+thai_metagenome_ID, thai_metagenome, thai_metabolome_ID, thai_metabolome, i_nonzero_metabolites = pickle.load(pickle_in)
 
 i_nonzero_microbes = thai_metagenome_ID.values.copy()
-i_nonzero_metabolites = net['metabolites_ID'].unique()
-i_nonzero_metabolites = np.sort(i_nonzero_metabolites)
-
+#i_nonzero_metabolites = net['metabolites_ID'].unique()
+#i_nonzero_metabolites = np.sort(i_nonzero_metabolites)
 
 df_metabolites = pd.DataFrame.from_dict({'oldID': i_nonzero_metabolites, 'newID':list(range(len(i_nonzero_metabolites)))})
 df_metabolites.set_index('oldID', inplace=True)
@@ -311,7 +310,7 @@ def pred_error_addingLinks(x, m2b_ori, b2m_ori, x_ori):
     pred_error1 = np.mean(log_list_aveDiet[:,0])
     pred_error2 = np.mean(log_list_aveDiet[:,1])
     pred_error3 = np.sum(np.abs(x))
-    hyper_reg = 0.001
+    hyper_reg = 0.0025
     #pred_errorTotal = pred_error1 + pred_error2 + hyper_reg * pred_error3
     pred_errorTotal = pred_error2 + hyper_reg * pred_error3
     #print(pred_error, pred_error3)
@@ -418,4 +417,4 @@ df_added_pos.columns = ['position in x']
 
 df_added_tables = pd.concat([df_added_metabolites, df_added_microbes, df_added_edgeTypes,  df_added_errorReduced, df_added_step, df_added_pos], axis=1, sort=False)
 df_added_tables.sort_values(by = 'error reduced', ascending=False)
-df_added_tables.to_csv('added_links_prior_distribution_run' + sys.argv[1]+'.csv')
+df_added_tables.to_csv('added_links_prior_distribution_deleteNum'+sys.argv[1]+'_run' + sys.argv[2]+'.csv')

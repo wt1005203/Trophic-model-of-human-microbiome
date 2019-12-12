@@ -318,6 +318,8 @@ def pred_error_addingLinks(x, m2b_ori, b2m_ori, x_ori):
 error_list = []
 current_step_list = []
 pos_x_list = []
+metID_list = []
+microbeID_list = []
 fun = lambda x: pred_error_addingLinks(x, m2b_ori, b2m_ori, x_ori)
 max_links = m2b.shape[0]*m2b.shape[1]
 x = x_ori.copy()
@@ -325,47 +327,50 @@ x = x_ori.copy()
 error_before = fun(x)
 print('The original error is', error_before)
 error_list.append(error_before)
+
+inverseKT = 5000
+Twindow = 500
+error_window = []
 for i in range(10000):
     if i%50==0:
         print(i)
     #i_x = random.randint(0,max_links*2-1)
     i_x = random.choice(np.where(x==0)[0])
     x[i_x] = 1
+    #x[i_x] = 1 - x[i_x]
     error_after = fun(x)
-    if (error_before <= error_after):# (np.random.uniform(0,1,1)[0] >= np.exp(1000*(error_before - error_after))):  ## not accepted
-        x[i_x] = 0
-        #print('not accepted, error is', error_before)
-    else:  ## accepted   
+    if np.random.uniform(0,1,1)[0] <= np.min([1, np.exp(inverseKT*(error_before - error_after))]):
+    #if (error_before > error_after):# (np.random.uniform(0,1,1)[0] >= np.exp(1000*(error_before - error_after))):  ## not accepted
+        ## accepted   
         error_before = error_after
         print('accepted, error is', error_before)
         error_list.append(error_before)
         current_step_list.append(i)
         pos_x_list.append(i_x)
-    #print(error_after / error_before)
+        if i_x < max_links:
+            row_num = i_x // m2b_ori.shape[1]
+            col_num = i_x - row_num * m2b_ori.shape[1]
+        elif i_x >= max_links:
+            i_x = i_x - m2b_ori.shape[0] * m2b_ori.shape[1]
+            row_num = i_x // b2m_ori.shape[1]
+            col_num = i_x - row_num * b2m_ori.shape[1]
+        metID_list.append(row_num)
+        microbeID_list.append(col_num)
+        #print('not accepted, error is', error_before)
+    else:  ## not accepted   
+        x[i_x] = 0
+        #x[i_x] = 1 - x[i_x]
+    error_window.append(error_before)
+    if (i > Twindow) and ((error_window[-1] - error_window[-Twindow]) > -(np.sqrt(Twindow) / inverseKT)):
+        break
 
 ######## Convert x to net structure:
-thres = 0.1
-x = x - x_ori
-
-m2b_added = x[:max_links].reshape((m2b.shape[0], m2b.shape[1]))
-#a = thai_metabolome_ID.iloc[np.where(m2b_added >= thres)[0]]
-#b = thai_metagenome_ID.iloc[np.where(m2b_added >= thres)[1]]
-#a = thai_metabolome_ID[np.where(m2b_added >= thres)[0]]
-a = df_metabolites['newID'].values[np.where(m2b_added >= thres)[0]]
-b = thai_metagenome_ID[np.where(m2b_added >= thres)[1]]
-c = [2] * np.where(m2b_added >= thres)[1].shape[0]
-net_added_consumption = pd.DataFrame({net_ori.columns[0]:list(a), net_ori.columns[1]:list(b), net_ori.columns[2]:c})
-
-b2m_added = x[max_links:].reshape((m2b.shape[0], m2b.shape[1]))
-#a = thai_metabolome_ID.iloc[np.where(b2m_added >= thres)[0]]
-#b = thai_metagenome_ID.iloc[np.where(b2m_added >= thres)[1]]
-#a = thai_metabolome_ID[np.where(b2m_added >= thres)[0]]
-a = df_metabolites['newID'].values[np.where(b2m_added >= thres)[0]]
-b = thai_metagenome_ID[np.where(b2m_added >= thres)[1]]
-c = [3] * np.where(b2m_added >= thres)[1].shape[0]
-net_added_production = pd.DataFrame({net_ori.columns[0]:list(a), net_ori.columns[1]:list(b), net_ori.columns[2]:c})
-
-net_new = pd.concat([net_ori, net_added_consumption, net_added_production])
+a = np.array(metID_list)
+b = np.array(microbeID_list)
+c = np.ones([len(metID_list)], dtype = int) * 3
+c[np.where(np.array(pos_x_list) < max_links)[0]] = 2
+net_added = pd.DataFrame({net_ori.columns[0]:list(a), net_ori.columns[1]:list(b), net_ori.columns[2]:c})
+net_new = pd.concat([net_ori, net_added])
 
 
 NUMADDED = len(net_new) - len(net_ori)
@@ -398,4 +403,4 @@ df_added_pos.columns = ['position in x']
 
 df_added_tables = pd.concat([df_added_metabolites, df_added_microbes, df_added_edgeTypes,  df_added_errorReduced, df_added_step, df_added_pos], axis=1, sort=False)
 df_added_tables.sort_values(by = 'error reduced', ascending=False)
-df_added_tables.to_csv('added_links_run' + sys.argv[1]+'.csv')
+df_added_tables.to_csv('added_links_full_run' + sys.argv[1]+'.csv')
